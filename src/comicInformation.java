@@ -10,13 +10,29 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.zip.*;
 
-public class comicInformation {
+public class comicInformation implements Runnable {
+    static Comic comic;
+    static comicInformation cI1 = new comicInformation();
+    static Thread t1 = new Thread(cI1);
+    static Thread t2 = new Thread(cI1);
+
     // TODO Implement cross-platform functionality
     // TODO Implement save states
     // TODO Implement multi-threading for concurrent downloading
 
     public static void main(String[] args) throws IOException{
         comicInformationGrabber();
+
+        t1.start();
+        t2.start();
+    }
+
+    public void run(){
+        try {
+            comicDownloader();
+        } catch (IOException e){
+            e.printStackTrace();
+        }
     }
 
     private static void comicInformationGrabber() throws IOException{
@@ -78,11 +94,9 @@ public class comicInformation {
 
         /* TODO I created a Comic class to store the information as my goal is to implement a database of some sorts
             in the future, whether through SQL or using JSON files. */
-        Comic comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
+        comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
 
         System.out.println(comic + "\n");
-
-        comicDownloader(comic);
     }
 
     private static int chapterEnumerator(Document webpage, LinkedList<String> chapterUrls, LinkedList<Double> issues){
@@ -108,7 +122,7 @@ public class comicInformation {
         return countedIssues;
     }
 
-    private static void comicDownloader(Comic comic) throws IOException{
+    private static void comicDownloader() throws IOException{
         /*  We can use a relative path here as the compiler knows we want to work in the project root. */
         File folder = new File("downloads\\" + comic.getName());
 
