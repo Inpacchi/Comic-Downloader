@@ -15,6 +15,12 @@ As of right now, the application is developed purely in Java and I have no inten
 - Implement a GUI
 - Test URLs for actual connection status
   - Test URL for validity
+- Implement multi-threading for concurrent downloading
+
+# Priorities
+ - Clean up, reformat, and comment code
+ - Implement multi-threading
+ - Check pages for integrity and presense
 
 # Bugs
 None at the moment (and I'd like to keep it that way!)
