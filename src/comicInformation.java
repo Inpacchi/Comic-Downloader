@@ -3,7 +3,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import javax.swing.*;
 import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
@@ -20,10 +19,14 @@ public class comicInformation {
     }
 
     private static void comicInformationGrabber() throws IOException{
-        String url = JOptionPane.showInputDialog("Enter the URL of a comic you want to download.");
+        //String url = JOptionPane.showInputDialog("Enter the URL of a comic you want to download.");
+        String url = "https://readcomics.io/comic/amazing-spider-man-complete";
+        System.out.println("Establishing connection to " + url + "...");
 
         // Establish connection to the comic webpage.
         Document webpage = Jsoup.connect(url).get();
+
+        System.out.println("Connection established!\n");
 
             /*  We only want to deal with the body of the page. On top of that, we can narrow it down to where the
                 attributes are held by selecting the class box anime-desc and then selecting each individual table
@@ -53,52 +56,95 @@ public class comicInformation {
         comicElements = webpage.body().select("div.detail-desc-content").select("p");
         String description = comicElements.text();
 
-        /*  Again reusing. Accessing the list of comics with the URLs and issue numbers now. */
-        comicElements = webpage.body().select("ul.basic-list").select("a.ch-name");
-
         LinkedList<String> chapterUrls = new LinkedList<>(); // Using a Linked List to take advantage of the addFirst method.
-        int issues = 0;
+        LinkedList<Double> issues = new LinkedList<>();
 
-        /*  We are adding each element from comicElements that match a absolute URL (hence the abs:href tag) to our
-            chapterUrls LinkedList. We also increment issues as each sucessful add is a new issue. */
-        for(Element element : comicElements){
-            chapterUrls.addFirst(element.attr("abs:href"));
-            issues++;
+        int countedIssues = chapterEnumerator(webpage, chapterUrls, issues);
+
+        /*  This is our check to see if there are more chapters on different pages. */
+        if(webpage.getAllElements().hasClass("general-nav")){
+            comicElements = webpage.body().select("div.general-nav").get(0).getElementsByAttribute("href");
+            ArrayList pages = new ArrayList();
+
+            /*  We want to make sure we aren't including duplicate chapters. */
+            for(Element element : comicElements) if(!pages.contains(element.attr("abs:href"))) pages.add(element.attr("abs:href"));
+
+            for(Object page : pages){
+                Document newWebpage = Jsoup.connect((String) page).get();
+
+                countedIssues += chapterEnumerator(newWebpage, chapterUrls, issues);
+            }
         }
 
         /* TODO I created a Comic class to store the information as my goal is to implement a database of some sorts
             in the future, whether through SQL or using JSON files. */
-        Comic comic = new Comic(name, status, authors, url, description, issues, chapterUrls);
+        Comic comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
+
+        System.out.println(comic + "\n");
 
         comicDownloader(comic);
+    }
+
+    private static int chapterEnumerator(Document webpage, LinkedList<String> chapterUrls, LinkedList<Double> issues){
+        int countedIssues = 0;
+
+        /*  Accessing the list of comics with the URLs and issue numbers now. */
+        Elements urls = webpage.body().select("ul.basic-list").select("a.ch-name");
+
+        /*  We are adding each element from urls that match a absolute URL (hence the abs:href tag) to our
+            chapterUrls LinkedList. We also increment issues as each successful add is a new issue. */
+        for(Element element : urls){
+            String url = element.attr("abs:href");
+            chapterUrls.addFirst(url);
+
+            String[] urlParts = url.split("-");
+            issues.addFirst(Double.parseDouble(urlParts[4]));
+
+            countedIssues++;
+        }
+
+        return countedIssues;
     }
 
     private static void comicDownloader(Comic comic) throws IOException{
         /*  We can use a relative path here as the compiler knows we want to work in the project root. */
         File folder = new File("downloads\\" + comic.getName());
 
-
         if(!folder.exists()){ // If the folder doesn't exist, make the directory.
             folder.mkdir();
+            System.out.println("Creating folder " + folder + "...\n");
         }
 
 
-        for(int issue = 1; issue <= comic.getIssues(); issue++){ // Download each issue
-            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue - 1), issue);
+        for(int issue = 0; issue < comic.getCountedIssues(); issue++){ // Download each issue
+            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
         }
     }
 
-    private static void chapterDownloader(String name, String parentFolder, String url, int issue) throws IOException{
+    private static void chapterDownloader(String name, String parentFolder, String url, Double issue) throws IOException{
         /*  Create a folder for each issue in the parent folder. cbzFolder is a check for our if statement further down. */
-        File folder = new File(parentFolder + "\\" + name + " #" + issue);
-        File cbzFolder = new File(folder.getAbsolutePath() + ".cbz");
+        File folder;
+        File cbzFolder;
+        String fileName;
+
+        if(issue.toString().contains(".0")){
+            folder = new File(parentFolder + "\\" + name + " #" + issue.intValue());
+            cbzFolder = new File(parentFolder + "\\" + name + " #" + issue.intValue() + ".cbz");
+            fileName = name + " #" + issue.intValue();
+        } else {
+            folder = new File(parentFolder + "\\" + name + " #" + issue);
+            cbzFolder = new File(parentFolder + "\\" + name + " #" + issue + ".cbz");
+            fileName = name + " #" + issue;
+        }
 
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
             folder.mkdir();
+            System.out.println("Creating folder " + folder + "...\n" + "Establishing connection to " + url + "...");
 
             Document webpage = Jsoup.connect(url).get();
+            System.out.println("Connection established!\n" + "Downloading " + fileName + "...");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -107,17 +153,17 @@ public class comicInformation {
                 we can use Integer.parseInt() to grab the numeric value. */
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
 
-            /*  Download each page. Because the link on the website doesn't have a "/1" for the first page, we have
-                an if statement to take care of that and it's subsequent pages. */
-            for (int page = 1; page <= numberOfPages; page++) {
-                if (page == 1) pageDownloader(url, folder.getAbsolutePath(), page);
-                else pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
-            }
+            System.out.println("Downloading pages...");
+            /*  Download each page. */
+            for (int page = 1; page <= numberOfPages; page++) pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
 
             comicMaker(name, issue, folder, parentFolder); // Convert to .cbz
+        } else { // TODO Check for pages
+            System.out.println(fileName + " already exists!\n");
         }
     }
 
+    // TODO Check for missing pages
     private static void pageDownloader(String url, String folder, int page) throws IOException{
         Document webpage = Jsoup.connect(url).get();
 
@@ -156,13 +202,21 @@ public class comicInformation {
         in.close();
     }
 
-    private static void comicMaker(String name, int issue, File folder, String parentFolder) throws IOException{
+    private static void comicMaker(String name, Double issue, File folder, String parentFolder) throws IOException{
         /*  We can only zip files, not a directory, so we want to get a list of all files in the directory and store them
             in a File[] array as that is what .listFiles() returns. */
         File[] pages = folder.listFiles();
 
-        /*  We can zip right to a .cbz file as a .zip file is basically a renamed .cbz file. */
-        String outputFile = name + " #" + issue + ".cbz";
+        String outputFile = "";
+
+        if(issue.toString().contains(".0")){ // We can zip right to a .cbz file as a .zip file is basically a renamed .cbz file.
+            outputFile = name + " #" + issue.intValue() + ".cbz";
+            System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...\n");
+        } else {
+            outputFile = name + " #" + issue + ".cbz";
+            System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...\n");
+        }
+
 
         /*  Our FileOutputStream is the path of our output. ZipOutputStream will zip to that file. */
         FileOutputStream fos = new FileOutputStream(parentFolder + "\\" + outputFile);

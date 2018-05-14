@@ -7,8 +7,9 @@ public class Comic {
     private ArrayList<String> authors = new ArrayList<>();
     private String url;
     private String description;
-    private int issues;
+    private int countedIssues;
     private LinkedList chapterUrls = new LinkedList();
+    private LinkedList issues = new LinkedList<>();
 
     public String getName() {
         return name;
@@ -30,7 +31,11 @@ public class Comic {
         return description;
     }
 
-    public int getIssues() {
+    public int getCountedIssues() {
+        return countedIssues;
+    }
+
+    public LinkedList getIssues() {
         return issues;
     }
 
@@ -43,26 +48,28 @@ public class Comic {
         status = "";
         url = "";
         description = "";
-        issues = 0;
+        countedIssues = 0;
     }
 
-    public Comic(String name, String status, String author, String url, String description, int issues, LinkedList chapterUrls){
+    public Comic(String name, String status, String author, String url, String description, int countedIssues, LinkedList<String> chapterUrls, LinkedList<Double> issues){
         this.name = name;
         this.status = status;
         this.authors.add(author);
         this.url = url;
         this.description = description;
-        this.issues = issues;
+        this.countedIssues = countedIssues;
         this.chapterUrls = chapterUrls;
+        this.issues = issues;
     }
 
-    public Comic(String name, String status, String[] authors, String url, String description, int issues, LinkedList chapterUrls){
+    public Comic(String name, String status, String[] authors, String url, String description, int countedIssues, LinkedList<String> chapterUrls, LinkedList<Double> issues){
         this.name = name;
         this.status = status;
         this.url = url;
         this.description = description;
-        this.issues = issues;
+        this.countedIssues = countedIssues;
         this.chapterUrls = chapterUrls;
+        this.issues = issues;
 
         for(String author : authors){
             this.authors.add(author);
@@ -74,8 +81,9 @@ public class Comic {
                 "\nStatus: " + status +
                 "\nAuthors: " + authors +
                 "\nDescription: " + description +
-                "\nNumber of Issues: " + issues +
+                "\nNumber of Issues: " + countedIssues +
                 "\nURL: " + url +
-                "\nChapter URLs: " + chapterUrls;
+                "\nChapter URLs: " + chapterUrls +
+                "\nIssue Numbers: " + issues;
     }
 }
