@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.LinkedList;
 
+// TOOD Implement chapter list
 public class Comic {
     private String name;
     private String status;
@@ -51,7 +52,7 @@ public class Comic {
         countedIssues = 0;
     }
 
-    public Comic(String name, String status, String author, String url, String description, int countedIssues, LinkedList<String> chapterUrls, LinkedList<Double> issues){
+    public Comic(String name, String status, String author, String url, String description, int countedIssues, LinkedList chapterUrls, LinkedList issues){
         this.name = name;
         this.status = status;
         this.authors.add(author);
@@ -62,7 +63,7 @@ public class Comic {
         this.issues = issues;
     }
 
-    public Comic(String name, String status, String[] authors, String url, String description, int countedIssues, LinkedList<String> chapterUrls, LinkedList<Double> issues){
+    public Comic(String name, String status, String[] authors, String url, String description, int countedIssues, LinkedList chapterUrls, LinkedList issues){
         this.name = name;
         this.status = status;
         this.url = url;

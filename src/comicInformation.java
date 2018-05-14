@@ -13,6 +13,7 @@ import java.util.zip.*;
 public class comicInformation {
     // TODO Implement cross-platform functionality
     // TODO Implement save states
+    // TODO Implement multi-threading for concurrent downloading
 
     public static void main(String[] args) throws IOException{
         comicInformationGrabber();
@@ -28,17 +29,17 @@ public class comicInformation {
 
         System.out.println("Connection established!\n");
 
-            /*  We only want to deal with the body of the page. On top of that, we can narrow it down to where the
-                attributes are held by selecting the class box anime-desc and then selecting each individual table
-                element. */
+        /*  We only want to deal with the body of the page. On top of that, we can narrow it down to where the
+            attributes are held by selecting the class box anime-desc and then selecting each individual table
+             element. */
         Elements comicElements = webpage.body().select("div.anime-desc").select("tbody > tr > td");
         comicElements.select("span").remove(); // Remove unnecessary elements.
 
         ArrayList attributes = new ArrayList<>(); // A simpler list to store our comic book attributes in.
 
-            /*  For each element, if the next element is not equal to null (as when we remove an object from the Elements
-                as we did above, it literally removes it, but leaves a space, which is null. We don't want that in our
-                simplified attributes arraylist. */
+        /*  For each element, if the next element is not equal to null (as when we remove an object from the Elements
+            as we did above, it literally removes it, but leaves a space, which is null. We don't want that in our
+            simplified attributes arraylist. */
         for(Element element : comicElements) if(element.nextElementSibling() != null) attributes.add(element.nextElementSibling().text());
 
         attributes.remove(1); // We are not keeping track of the alternate title.
@@ -48,11 +49,10 @@ public class comicInformation {
         String name = (String) attributes.get(0);
         String status = (String) attributes.get(1);
         String rawAuthors = (String) attributes.get(2);
-        /*  Some books have multiple authors and we account for that here by splitting them.*/
-        String[] authors = rawAuthors.split(", ");
+        String[] authors = rawAuthors.split(", "); // Some books have multiple authors and we account for that here by splitting them
 
-            /*  We are making efficient use of memory by reusing our old variables instead of creating new ones. Now we
-                move on to the description of the comic and store that. */
+        /*  We are making efficient use of memory by reusing our old variables instead of creating new ones. Now we
+            move on to the description of the comic and store that. */
         comicElements = webpage.body().select("div.detail-desc-content").select("p");
         String description = comicElements.text();
 
@@ -97,6 +97,8 @@ public class comicInformation {
             String url = element.attr("abs:href");
             chapterUrls.addFirst(url);
 
+            /*  We want to split the URL into parts as the specific part we need, the issue number, is separated by a '-'.
+                If you run an index on the array, you'll find the issue number at index 4, which is all we need. */
             String[] urlParts = url.split("-");
             issues.addFirst(Double.parseDouble(urlParts[4]));
 
@@ -115,10 +117,7 @@ public class comicInformation {
             System.out.println("Creating folder " + folder + "...\n");
         }
 
-
-        for(int issue = 0; issue < comic.getCountedIssues(); issue++){ // Download each issue
-            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
-        }
+        for(int issue = 0; issue < comic.getCountedIssues(); issue++) chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
     }
 
     private static void chapterDownloader(String name, String parentFolder, String url, Double issue) throws IOException{
@@ -140,11 +139,9 @@ public class comicInformation {
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
-            folder.mkdir();
-            System.out.println("Creating folder " + folder + "...\n" + "Establishing connection to " + url + "...");
-
+            System.out.println("Establishing connection to " + url + "...");
             Document webpage = Jsoup.connect(url).get();
-            System.out.println("Connection established!\n" + "Downloading " + fileName + "...");
+            System.out.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -153,17 +150,50 @@ public class comicInformation {
                 we can use Integer.parseInt() to grab the numeric value. */
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
 
-            System.out.println("Downloading pages...");
+            folder.mkdir();
+            System.out.println("Creating folder " + folder + "...\n" +
+                    "Downloading " + fileName + "...");
+
             /*  Download each page. */
             for (int page = 1; page <= numberOfPages; page++) pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
 
             comicMaker(name, issue, folder, parentFolder); // Convert to .cbz
-        } else { // TODO Check for pages
-            System.out.println(fileName + " already exists!\n");
+
+            System.out.println("Download complete!\n");
+        } else if(folder.exists()){ // TODO Check for pages
+            System.out.println("Establishing connection to " + url + "...");
+            Document webpage = Jsoup.connect(url).get();
+            System.out.println("Connection established!");
+
+            /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
+                <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
+                so we only choose one by using .first(). We want the text, as we want a numeric value. We then use
+                .replaceAll() with the "\\D+" regex to replace anything that is NOT a number with an empty space. This way
+                we can use Integer.parseInt() to grab the numeric value. */
+            int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
+
+            System.out.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
+
+            File[] images = folder.listFiles();
+            int counter = 0;
+
+            for(File image : images) counter++;
+
+            if(counter != numberOfPages) System.out.println("Incomplete download found. Deleting...");
+
+            for(File image : images) image.delete();
+
+            System.out.println("Redownloading " + fileName + "...");
+            for (int page = 1; page <= numberOfPages; page++) pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
+
+            comicMaker(name, issue, folder, parentFolder);
+
+            System.out.println("Download complete!\n");
+        } else {
+            System.out.println((fileName + " already exists!\n"));
         }
     }
 
-    // TODO Check for missing pages
     private static void pageDownloader(String url, String folder, int page) throws IOException{
         Document webpage = Jsoup.connect(url).get();
 
@@ -211,10 +241,10 @@ public class comicInformation {
 
         if(issue.toString().contains(".0")){ // We can zip right to a .cbz file as a .zip file is basically a renamed .cbz file.
             outputFile = name + " #" + issue.intValue() + ".cbz";
-            System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...\n");
+            System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...");
         } else {
             outputFile = name + " #" + issue + ".cbz";
-            System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...\n");
+            System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
         }
 
 
@@ -232,7 +262,6 @@ public class comicInformation {
             pageWriter(page, zos);
             page.delete();
         }
-
 
         folder.delete();
         zos.close();
