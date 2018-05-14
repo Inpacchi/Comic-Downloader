@@ -11,7 +11,7 @@ As of right now, the application is developed purely in Java and I have no inten
 - Implement cross-platform functionality
 - Implement save states and integrate with a database
   - Considering either PostgreSQL or JSON files
-- Check for missing pages from open archives
+- Check pages for integrity instead of deletion
 - Implement a GUI
 - Test URLs for actual connection status
   - Test URL for validity
@@ -20,7 +20,6 @@ As of right now, the application is developed purely in Java and I have no inten
 # Priorities
  - Clean up, reformat, and comment code
  - Implement multi-threading
- - Check pages for integrity and presense
 
 # Bugs
 None at the moment (and I'd like to keep it that way!)
