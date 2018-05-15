@@ -13,13 +13,9 @@ As of right now, the application is developed purely in Java and I have no inten
   - Considering either PostgreSQL or JSON files
 - Check pages for integrity instead of deletion
 - Implement a GUI
-- Test URLs for actual connection status
-  - Test URL for validity
-- Implement multi-threading for concurrent downloading
 
 # Priorities
- - Clean up, reformat, and comment code
- - Implement multi-threading
+ - Save state implementation
 
 # Bugs
 None at the moment (and I'd like to keep it that way!)
