@@ -1,30 +1,50 @@
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.zip.*;
 
-public class comicInformation implements Runnable {
-    static Comic comic;
-    static comicInformation cI1 = new comicInformation();
-    static Thread t1 = new Thread(cI1);
-    static Thread t2 = new Thread(cI1);
+public class comicInformation extends Thread {
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static Comic comic; // Global variable so it can be used in any method without parameter passthrough
 
+    /*  These control our multi-threading. Because our class extends thread, that means we can create an object from our
+        class and initialize it so we can do what we need to do in our main method. The processingQueue will be initialized
+        in our main method as well, as a ConcurrentLinkedQueue so multiple threads can work out of it at one time. */
+    static comicInformation thread1 = new comicInformation();
+    static comicInformation thread2 = new comicInformation();
+    static comicInformation thread3 = new comicInformation();
+    static comicInformation thread4 = new comicInformation();
+
+    static Queue processingQueue;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO Implement cross-platform functionality
     // TODO Implement save states
-    // TODO Implement multi-threading for concurrent downloading
 
     public static void main(String[] args) throws IOException{
+        processingQueue = new ConcurrentLinkedQueue();
+
         comicInformationGrabber();
 
-        t1.start();
-        t2.start();
+        thread1.setName("Comic-Downloader Thread 1");
+        thread2.setName("Comic-Downloader Thread 2");
+        thread3.setName("Comic-Downloader Thread 3");
+        thread4.setName("Comic-Downloader Thread 4");
+
+        thread1.start();
+        thread2.start();
+        thread3.start();
+        thread4.start();
     }
 
     public void run(){
@@ -34,16 +54,32 @@ public class comicInformation implements Runnable {
             e.printStackTrace();
         }
     }
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     private static void comicInformationGrabber() throws IOException{
+        File downloads = new File("downloads");
+
+        if(!downloads.exists()){
+            downloads.mkdir();
+        }
+
         //String url = JOptionPane.showInputDialog("Enter the URL of a comic you want to download.");
         String url = "https://readcomics.io/comic/amazing-spider-man-complete";
         System.out.println("Establishing connection to " + url + "...");
 
         // Establish connection to the comic webpage.
-        Document webpage = Jsoup.connect(url).get();
+        Connection webpageConnection = Jsoup.connect(url);
 
-        System.out.println("Connection established!\n");
+        /*  Verify that the connection to the webpage is okay. */
+        int statusCode = webpageConnection.execute().statusCode();
+
+        if(statusCode == 200) System.out.println("Connection " + webpageConnection.execute().statusMessage() +
+                    " with status code " + statusCode + "!");
+            else {
+                System.out.println("Received error code: " + statusCode + "\nTry again!");
+                return;
+            }
+
+        Document webpage = webpageConnection.get();
 
         /*  We only want to deal with the body of the page. On top of that, we can narrow it down to where the
             attributes are held by selecting the class box anime-desc and then selecting each individual table
@@ -92,11 +128,19 @@ public class comicInformation implements Runnable {
             }
         }
 
+        for(Double issue : issues){
+            if(issue.toString().contains(".0")){
+                processingQueue.add(issue.intValue());
+            } else {
+                processingQueue.add(issue);
+            }
+        }
+
         /* TODO I created a Comic class to store the information as my goal is to implement a database of some sorts
             in the future, whether through SQL or using JSON files. */
         comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
 
-        System.out.println(comic + "\n");
+        //System.out.println(comic + "\n");
     }
 
     private static int chapterEnumerator(Document webpage, LinkedList<String> chapterUrls, LinkedList<Double> issues){
@@ -128,10 +172,22 @@ public class comicInformation implements Runnable {
 
         if(!folder.exists()){ // If the folder doesn't exist, make the directory.
             folder.mkdir();
-            System.out.println("Creating folder " + folder + "...\n");
+            //System.out.println("Creating folder " + folder + "...\n");
         }
 
-        for(int issue = 0; issue < comic.getCountedIssues(); issue++) chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
+        /*  Since we're working with a queue, our loop-through process is extremely simple. While the queue is not empty,
+            poll an item (remove an item) from the top of the queue into an int issue, which we will then plug into our
+            comicDownloader method. Each thread will do this and pull a number off the queue, hence working with a
+            different issue. */
+        while(!processingQueue.isEmpty()){
+            int issue = (Integer) processingQueue.poll();
+            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
+        }
+
+        thread1.interrupt();
+        thread2.interrupt();
+        thread3.interrupt();
+        thread4.interrupt();
     }
 
     private static void chapterDownloader(String name, String parentFolder, String url, Double issue) throws IOException{
@@ -140,6 +196,7 @@ public class comicInformation implements Runnable {
         File cbzFolder;
         String fileName;
 
+        /*  Checking if the issue is a integer or double and working with it accordingly. */
         if(issue.toString().contains(".0")){
             folder = new File(parentFolder + "\\" + name + " #" + issue.intValue());
             cbzFolder = new File(parentFolder + "\\" + name + " #" + issue.intValue() + ".cbz");
@@ -153,9 +210,9 @@ public class comicInformation implements Runnable {
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
-            System.out.println("Establishing connection to " + url + "...");
+            //System.out.println("Establishing connection to " + url + "...");
             Document webpage = Jsoup.connect(url).get();
-            System.out.println("Connection established!");
+            //System.out.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -165,19 +222,26 @@ public class comicInformation implements Runnable {
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
 
             folder.mkdir();
-            System.out.println("Creating folder " + folder + "...\n" +
-                    "Downloading " + fileName + "...");
+            /*System.out.println("Creating folder " + folder + "...\n" +
+                    "Downloading " + fileName + "...");*/
+            System.out.println("Downloading " + fileName + " on " + Thread.currentThread().getName() + "...\n");
 
             /*  Download each page. */
-            for (int page = 1; page <= numberOfPages; page++) pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
+            for (int page = 1; page <= numberOfPages; page++){
+                if(!pageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
+                    /*  If it returns false, we want to stop downloading immediately as we don't want an incomplete chapter. */
+                    System.out.println(fileName + " couldn't download.\n");
+                    return;
+                }
+            }
 
             comicMaker(name, issue, folder, parentFolder); // Convert to .cbz
 
-            System.out.println("Download complete!\n");
-        } else if(folder.exists()){ // TODO Check for pages
-            System.out.println("Establishing connection to " + url + "...");
+            System.out.println("Downloaded " + fileName + "!\n");
+        } else if(folder.exists()){
+            //System.out.println("Establishing connection to " + url + "...");
             Document webpage = Jsoup.connect(url).get();
-            System.out.println("Connection established!");
+            //System.out.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -186,29 +250,36 @@ public class comicInformation implements Runnable {
                 we can use Integer.parseInt() to grab the numeric value. */
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
 
-            System.out.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
+            //System.out.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
 
             File[] images = folder.listFiles();
             int counter = 0;
 
             for(File image : images) counter++;
 
-            if(counter != numberOfPages) System.out.println("Incomplete download found. Deleting...");
+            if(counter != numberOfPages){
+                //System.out.println("Incomplete download found. Deleting...");
+                for(File image : images) image.delete();
 
-            for(File image : images) image.delete();
+                //System.out.println("Redownloading " + fileName + "...");
+                for (int page = 1; page <= numberOfPages; page++){
+                    if(!pageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
+                        System.out.println(fileName + " couldn't download.\n");
+                        return;
+                    }
+                }
 
-            System.out.println("Redownloading " + fileName + "...");
-            for (int page = 1; page <= numberOfPages; page++) pageDownloader(url + "/" + page, folder.getAbsolutePath(), page);
+                comicMaker(name, issue, folder, parentFolder);
 
-            comicMaker(name, issue, folder, parentFolder);
+                System.out.println("Downloaded " + fileName + "!\n");
+            }
 
-            System.out.println("Download complete!\n");
         } else {
-            System.out.println((fileName + " already exists!\n"));
+            System.out.println((fileName + " already downloaded!\n"));
         }
     }
 
-    private static void pageDownloader(String url, String folder, int page) throws IOException{
+    private static boolean pageDownloader(String fileName, String url, String folder, int page) throws IOException{
         Document webpage = Jsoup.connect(url).get();
 
         /*  Find the main image, which is our comic page, by the "main_img" id. We then want the URL so we can download
@@ -220,11 +291,21 @@ public class comicInformation implements Runnable {
 
         /*  We open the imageUrl as a URLConnection object because I encountered a 403 error when connecting without it.
             Upon further research, the server throws that error because it COULD happen, not because it DID happen. This
-            takes care of that by allowing us to imitate a web browser, which we achieve by injecting a User Agent. */
-        URLConnection image = imageUrl.openConnection();
-        image.addRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:25.0) Gecko/20100101 Firefox/25.0");
+            takes care of that by allowing us to imitate a web browser, which we achieve by injecting a User Agent.
 
-        InputStream in = image.getInputStream();
+            The response code is so we can get the error stream and see if it's null or not. If it isn't, then we want to
+            print whatever is in the error stream and exit downloading not only the page, but the chapter as well. */
+        HttpURLConnection image = (HttpURLConnection) imageUrl.openConnection();
+        image.addRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:25.0) Gecko/20100101 Firefox/25.0");
+        image.getResponseCode();
+
+        InputStream in;
+
+        if(image.getErrorStream() == null) in = image.getInputStream();
+            else {
+                System.out.println("Received error code: " + image.getErrorStream().read() + " for " + fileName + "\n");
+                return false;
+        }
 
         OutputStream out;
 
@@ -244,6 +325,7 @@ public class comicInformation implements Runnable {
             such as collecting garbage data and potentially crashing the program. */
         out.close();
         in.close();
+        return true;
     }
 
     private static void comicMaker(String name, Double issue, File folder, String parentFolder) throws IOException{
@@ -255,10 +337,10 @@ public class comicInformation implements Runnable {
 
         if(issue.toString().contains(".0")){ // We can zip right to a .cbz file as a .zip file is basically a renamed .cbz file.
             outputFile = name + " #" + issue.intValue() + ".cbz";
-            System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...");
+            //System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...");
         } else {
             outputFile = name + " #" + issue + ".cbz";
-            System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
+            //System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
         }
 
 
