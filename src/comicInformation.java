@@ -35,6 +35,7 @@ public class comicInformation extends Thread {
         processingQueue = new ConcurrentLinkedQueue();
 
         comicInformationGrabber();
+        threadStarter();
 
         thread1.setName("Comic-Downloader Thread 1");
         thread2.setName("Comic-Downloader Thread 2");
@@ -72,8 +73,8 @@ public class comicInformation extends Thread {
         /*  Verify that the connection to the webpage is okay. */
         int statusCode = webpageConnection.execute().statusCode();
 
-        if(statusCode == 200) System.out.println("Connection " + webpageConnection.execute().statusMessage() +
-                    " with status code " + statusCode + "!");
+        if(statusCode == 200) System.out.println("Connection: " + webpageConnection.execute().statusMessage() +
+                    "\nStatus Code: " + statusCode + "\n");
             else {
                 System.out.println("Received error code: " + statusCode + "\nTry again!");
                 return;
@@ -109,7 +110,7 @@ public class comicInformation extends Thread {
         String description = comicElements.text();
 
         LinkedList<String> chapterUrls = new LinkedList<>(); // Using a Linked List to take advantage of the addFirst method.
-        LinkedList<Double> issues = new LinkedList<>();
+        LinkedList issues = new LinkedList<>();
 
         int countedIssues = chapterEnumerator(webpage, chapterUrls, issues);
 
@@ -128,14 +129,6 @@ public class comicInformation extends Thread {
             }
         }
 
-        for(Double issue : issues){
-            if(issue.toString().contains(".0")){
-                processingQueue.add(issue.intValue());
-            } else {
-                processingQueue.add(issue);
-            }
-        }
-
         /* TODO I created a Comic class to store the information as my goal is to implement a database of some sorts
             in the future, whether through SQL or using JSON files. */
         comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
@@ -143,7 +136,17 @@ public class comicInformation extends Thread {
         //System.out.println(comic + "\n");
     }
 
-    private static int chapterEnumerator(Document webpage, LinkedList<String> chapterUrls, LinkedList<Double> issues){
+    private static void threadStarter(){
+        LinkedList issues = comic.getIssues();
+
+        for(Object issue : issues) {
+            if(issue.toString().contains(".")) processingQueue.add(issue);
+                else processingQueue.add(issue);
+        }
+    }
+
+    // TODO Review Big O Notation for LinkedList. It might be cheaper to start at the last webpage and add each issue from the bottom.
+    private static int chapterEnumerator(Document webpage, LinkedList<String> chapterUrls, LinkedList issues){
         int countedIssues = 0;
 
         /*  Accessing the list of comics with the URLs and issue numbers now. */
@@ -158,7 +161,9 @@ public class comicInformation extends Thread {
             /*  We want to split the URL into parts as the specific part we need, the issue number, is separated by a '-'.
                 If you run an index on the array, you'll find the issue number at index 4, which is all we need. */
             String[] urlParts = url.split("-");
-            issues.addFirst(Double.parseDouble(urlParts[4]));
+
+            if(urlParts[4].contains(".")) issues.addFirst(Double.parseDouble(urlParts[4]));
+                else issues.addFirst(Integer.parseInt(urlParts[4]));
 
             countedIssues++;
         }
@@ -177,11 +182,13 @@ public class comicInformation extends Thread {
 
         /*  Since we're working with a queue, our loop-through process is extremely simple. While the queue is not empty,
             poll an item (remove an item) from the top of the queue into an int issue, which we will then plug into our
-            comicDownloader method. Each thread will do this and pull a number off the queue, hence working with a
+            comicDownloader method. We have to make sure that we typecast our issue variable to type Integer as an Object
+            type variable is stored in our processingQueue. We must also make sure we subtract 1 from the result as we are
+            working with binary indexes. Each thread will do this and pull a number off the queue, hence working with a
             different issue. */
         while(!processingQueue.isEmpty()){
-            int issue = (Integer) processingQueue.poll();
-            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), ((Double) comic.getIssues().get(issue)));
+            int issue = ((Integer) processingQueue.poll()) - 1;
+            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), comic.getIssues().get(issue));
         }
 
         thread1.interrupt();
@@ -190,22 +197,11 @@ public class comicInformation extends Thread {
         thread4.interrupt();
     }
 
-    private static void chapterDownloader(String name, String parentFolder, String url, Double issue) throws IOException{
+    private static void chapterDownloader(String name, String parentFolder, String url, Object issue) throws IOException{
         /*  Create a folder for each issue in the parent folder. cbzFolder is a check for our if statement further down. */
-        File folder;
-        File cbzFolder;
-        String fileName;
-
-        /*  Checking if the issue is a integer or double and working with it accordingly. */
-        if(issue.toString().contains(".0")){
-            folder = new File(parentFolder + "\\" + name + " #" + issue.intValue());
-            cbzFolder = new File(parentFolder + "\\" + name + " #" + issue.intValue() + ".cbz");
-            fileName = name + " #" + issue.intValue();
-        } else {
-            folder = new File(parentFolder + "\\" + name + " #" + issue);
-            cbzFolder = new File(parentFolder + "\\" + name + " #" + issue + ".cbz");
-            fileName = name + " #" + issue;
-        }
+        File folder = new File(parentFolder + "\\" + name + " #" + issue);
+        File cbzFolder = new File(parentFolder + "\\" + name + " #" + issue + ".cbz");
+        String fileName = name + " #" + issue;
 
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
@@ -243,25 +239,18 @@ public class comicInformation extends Thread {
             Document webpage = Jsoup.connect(url).get();
             //System.out.println("Connection established!");
 
-            /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
-                <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
-                so we only choose one by using .first(). We want the text, as we want a numeric value. We then use
-                .replaceAll() with the "\\D+" regex to replace anything that is NOT a number with an empty space. This way
-                we can use Integer.parseInt() to grab the numeric value. */
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
-
             //System.out.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
 
             File[] images = folder.listFiles();
             int counter = 0;
 
-            for(File image : images) counter++;
+            for(int i = 0; i < images.length; i++) counter++;
 
             if(counter != numberOfPages){
-                //System.out.println("Incomplete download found. Deleting...");
+                System.out.println("Incomplete download found. Deleting and redownloading " + fileName + "...");
                 for(File image : images) image.delete();
 
-                //System.out.println("Redownloading " + fileName + "...");
                 for (int page = 1; page <= numberOfPages; page++){
                     if(!pageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
                         System.out.println(fileName + " couldn't download.\n");
@@ -270,7 +259,6 @@ public class comicInformation extends Thread {
                 }
 
                 comicMaker(name, issue, folder, parentFolder);
-
                 System.out.println("Downloaded " + fileName + "!\n");
             }
 
@@ -305,7 +293,7 @@ public class comicInformation extends Thread {
             else {
                 System.out.println("Received error code: " + image.getErrorStream().read() + " for " + fileName + "\n");
                 return false;
-        }
+            }
 
         OutputStream out;
 
@@ -328,21 +316,13 @@ public class comicInformation extends Thread {
         return true;
     }
 
-    private static void comicMaker(String name, Double issue, File folder, String parentFolder) throws IOException{
+    private static void comicMaker(String name, Object issue, File folder, String parentFolder) throws IOException{
         /*  We can only zip files, not a directory, so we want to get a list of all files in the directory and store them
             in a File[] array as that is what .listFiles() returns. */
         File[] pages = folder.listFiles();
 
-        String outputFile = "";
-
-        if(issue.toString().contains(".0")){ // We can zip right to a .cbz file as a .zip file is basically a renamed .cbz file.
-            outputFile = name + " #" + issue.intValue() + ".cbz";
-            //System.out.println("Compressing " + name + " #" + issue.intValue() + " to .cbz archive...");
-        } else {
-            outputFile = name + " #" + issue + ".cbz";
-            //System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
-        }
-
+        String outputFile = name + " #" + issue + ".cbz";
+        //System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
 
         /*  Our FileOutputStream is the path of our output. ZipOutputStream will zip to that file. */
         FileOutputStream fos = new FileOutputStream(parentFolder + "\\" + outputFile);
