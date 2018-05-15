@@ -4,9 +4,9 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import javax.swing.*;
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -20,21 +20,28 @@ public class comicInformation extends Thread {
     /*  These control our multi-threading. Because our class extends thread, that means we can create an object from our
         class and initialize it so we can do what we need to do in our main method. The processingQueue will be initialized
         in our main method as well, as a ConcurrentLinkedQueue so multiple threads can work out of it at one time. */
-    static comicInformation thread1 = new comicInformation();
-    static comicInformation thread2 = new comicInformation();
-    static comicInformation thread3 = new comicInformation();
-    static comicInformation thread4 = new comicInformation();
+    private static comicInformation thread1 = new comicInformation();
+    private static comicInformation thread2 = new comicInformation();
+    private static comicInformation thread3 = new comicInformation();
+    private static comicInformation thread4 = new comicInformation();
 
     static Queue processingQueue;
+
+    static ArrayList skippedChapters; // For each issue that is skipped, keep track of it.
+
+    private volatile boolean stop = false; // Our exit value for our threads.
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO Implement cross-platform functionality
     // TODO Implement save states
+    // TODO Implement a way to login to the website and check favorites for comic URLs
+    // TODO Implement a way to run in the background and passively check, if so desired. Otherwise, run on launch
 
     public static void main(String[] args) throws IOException{
         processingQueue = new ConcurrentLinkedQueue();
+        skippedChapters = new ArrayList();
 
-        comicInformationGrabber();
+        if(!comicInformationGrabber()) return;
         threadStarter();
 
         thread1.setName("Comic-Downloader Thread 1");
@@ -49,14 +56,20 @@ public class comicInformation extends Thread {
     }
 
     public void run(){
-        try {
-            comicDownloader();
-        } catch (IOException e){
-            e.printStackTrace();
+        if(!stop){
+            try {
+                comicDownloader();
+            } catch (IOException e){
+                e.printStackTrace();
+            }
         }
     }
+
+    public void exit(){
+        stop = true;
+    }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private static void comicInformationGrabber() throws IOException{
+    private static boolean comicInformationGrabber() throws IOException{
         File downloads = new File("downloads");
 
         if(!downloads.exists()){
@@ -64,21 +77,22 @@ public class comicInformation extends Thread {
         }
 
         //String url = JOptionPane.showInputDialog("Enter the URL of a comic you want to download.");
-        String url = "https://readcomics.io/comic/amazing-spider-man-complete";
+        String url = "https://readcomics.io/comic/spider-man-2016";
         System.out.println("Establishing connection to " + url + "...");
 
         // Establish connection to the comic webpage.
-        Connection webpageConnection = Jsoup.connect(url);
+        Connection webpageConnection;
 
-        /*  Verify that the connection to the webpage is okay. */
-        int statusCode = webpageConnection.execute().statusCode();
-
-        if(statusCode == 200) System.out.println("Connection: " + webpageConnection.execute().statusMessage() +
-                    "\nStatus Code: " + statusCode + "\n");
-            else {
-                System.out.println("Received error code: " + statusCode + "\nTry again!");
-                return;
-            }
+        try {
+            webpageConnection = Jsoup.connect(url);
+            System.out.println("Connection " + webpageConnection.execute().statusMessage());
+        } catch (ConnectException e){
+            System.out.println("Couldn't establish connection to the webpage. Try again later.\n");
+            return false;
+        } catch (MalformedURLException | IllegalArgumentException e) {
+            System.out.println("That's not a valid URL. Exiting...");
+            return false;
+        }
 
         Document webpage = webpageConnection.get();
 
@@ -133,7 +147,8 @@ public class comicInformation extends Thread {
             in the future, whether through SQL or using JSON files. */
         comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
 
-        //System.out.println(comic + "\n");
+        System.out.println("\n" + comic + "\n");
+        return true;
     }
 
     private static void threadStarter(){
@@ -162,8 +177,8 @@ public class comicInformation extends Thread {
                 If you run an index on the array, you'll find the issue number at index 4, which is all we need. */
             String[] urlParts = url.split("-");
 
-            if(urlParts[4].contains(".")) issues.addFirst(Double.parseDouble(urlParts[4]));
-                else issues.addFirst(Integer.parseInt(urlParts[4]));
+            if(urlParts[urlParts.length - 1].contains(".")) issues.addFirst(Double.parseDouble(urlParts[4]));
+                else issues.addFirst(Integer.parseInt(urlParts[urlParts.length - 1]));
 
             countedIssues++;
         }
@@ -187,14 +202,33 @@ public class comicInformation extends Thread {
             working with binary indexes. Each thread will do this and pull a number off the queue, hence working with a
             different issue. */
         while(!processingQueue.isEmpty()){
-            int issue = ((Integer) processingQueue.poll()) - 1;
-            chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), comic.getIssues().get(issue));
+            if(processingQueue.isEmpty()) Thread.currentThread().interrupt();
+                else {
+                    int issue = ((Integer) processingQueue.poll()) - 1;
+                    chapterDownloader(comic.getName(), folder.getAbsolutePath(), (String) comic.getChapterUrls().get(issue), comic.getIssues().get(issue));
+                }
         }
 
-        thread1.interrupt();
-        thread2.interrupt();
-        thread3.interrupt();
-        thread4.interrupt();
+        if(thread1.isInterrupted()) thread1.exit();
+            else if(thread2.isInterrupted()) thread2.exit();
+            else if(thread3.isInterrupted()) thread3.exit();
+            else if(thread4.isInterrupted()) thread4.exit();
+
+         if(Thread.activeCount() == 3) System.out.println("Missing issues: " + skippedChapters);
+    }
+
+    private static Document webpageConnection(String url, Object issue) throws IOException{
+        Document webpage;
+
+        try {
+            webpage = Jsoup.connect(url).get();
+        } catch (SocketTimeoutException | ConnectException e){
+            System.out.println("Couldn't establish connection to the webpage. Skipping...\n");
+            skippedChapters.add(issue);
+            return null;
+        }
+
+        return webpage;
     }
 
     private static void chapterDownloader(String name, String parentFolder, String url, Object issue) throws IOException{
@@ -207,7 +241,10 @@ public class comicInformation extends Thread {
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
             //System.out.println("Establishing connection to " + url + "...");
-            Document webpage = Jsoup.connect(url).get();
+            Document webpage = webpageConnection(url, issue);
+
+            if(webpage == null) return;
+
             //System.out.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
@@ -222,21 +259,18 @@ public class comicInformation extends Thread {
                     "Downloading " + fileName + "...");*/
             System.out.println("Downloading " + fileName + " on " + Thread.currentThread().getName() + "...\n");
 
-            /*  Download each page. */
-            for (int page = 1; page <= numberOfPages; page++){
-                if(!pageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
-                    /*  If it returns false, we want to stop downloading immediately as we don't want an incomplete chapter. */
-                    System.out.println(fileName + " couldn't download.\n");
-                    return;
-                }
-            }
+            if(!pageDownloader(numberOfPages, fileName, url, folder, issue)) return;
 
             comicMaker(name, issue, folder, parentFolder); // Convert to .cbz
 
             System.out.println("Downloaded " + fileName + "!\n");
         } else if(folder.exists()){
             //System.out.println("Establishing connection to " + url + "...");
-            Document webpage = Jsoup.connect(url).get();
+
+            Document webpage = webpageConnection(url, issue);
+
+            if(webpage == null) return;
+
             //System.out.println("Connection established!");
 
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
@@ -251,12 +285,7 @@ public class comicInformation extends Thread {
                 System.out.println("Incomplete download found. Deleting and redownloading " + fileName + "...");
                 for(File image : images) image.delete();
 
-                for (int page = 1; page <= numberOfPages; page++){
-                    if(!pageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
-                        System.out.println(fileName + " couldn't download.\n");
-                        return;
-                    }
-                }
+                if(!pageDownloader(numberOfPages, fileName, url, folder, issue)) return;
 
                 comicMaker(name, issue, folder, parentFolder);
                 System.out.println("Downloaded " + fileName + "!\n");
@@ -267,8 +296,34 @@ public class comicInformation extends Thread {
         }
     }
 
-    private static boolean pageDownloader(String fileName, String url, String folder, int page) throws IOException{
-        Document webpage = Jsoup.connect(url).get();
+    private static boolean pageDownloader(int numberOfPages, String fileName, String url, File folder, Object issue) throws IOException{
+        for (int page = 1; page <= numberOfPages; page++){
+            if(!internalPageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
+                System.out.println(fileName + " couldn't download.\n");
+
+                for(File image : folder.listFiles()) image.delete();
+                folder.delete();
+
+                skippedChapters.add(issue);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean internalPageDownloader(String fileName, String url, String folder, int page) throws IOException{
+        Document webpage;
+
+        try {
+            webpage = Jsoup.connect(url).get();
+        } catch (SocketTimeoutException e){
+            System.out.println("Couldn't establish connection to the webpage. Skipping...");
+            return false;
+        } catch (ConnectException e){
+            System.out.println("Couldn't establish connection to the webpage. Skipping...");
+            return false;
+        }
 
         /*  Find the main image, which is our comic page, by the "main_img" id. We then want the URL so we can download
             the image later on, and we do that by using the .asbUrl() method so we get a whole URL. The attributeKey "src"
