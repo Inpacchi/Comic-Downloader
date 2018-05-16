@@ -1,3 +1,5 @@
+package Comics;
+
 import java.io.File;
 
 public class Chapter extends Comic {

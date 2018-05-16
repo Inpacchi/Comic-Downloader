@@ -1,3 +1,6 @@
+package Comics;
+
+import GUI.Controller;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -13,46 +16,39 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.zip.*;
 
-public class comicInformation extends Thread {
+public class ComicMain extends Thread {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     static Comic comic; // Global variable so it can be used in any method without parameter passthrough
+
+    private static Controller guiController; // Static reference to our GUI controller so we can print to the GUI
 
     /*  These control our multi-threading. Because our class extends thread, that means we can create an object from our
         class and initialize it so we can do what we need to do in our main method. The processingQueue will be initialized
         in our main method as well, as a ConcurrentLinkedQueue so multiple threads can work out of it at one time. */
-    private static comicInformation thread1 = new comicInformation();
-    private static comicInformation thread2 = new comicInformation();
-    private static comicInformation thread3 = new comicInformation();
-    private static comicInformation thread4 = new comicInformation();
+    private static ComicMain thread1 = new ComicMain();
+    private static ComicMain thread2 = new ComicMain();
+    private static ComicMain thread3 = new ComicMain();
+    private static ComicMain thread4 = new ComicMain();
 
     static Queue processingQueue;
 
-    static ArrayList skippedChapters; // For each issue that is skipped, keep track of it.
+    static ArrayList skippedIssues; // For each issue that is skipped, keep track of it.
 
     private volatile boolean stop = false; // Our exit value for our threads.
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO Implement cross-platform functionality
     // TODO Implement save states
     // TODO Implement a way to login to the website and check favorites for comic URLs
     // TODO Implement a way to run in the background and passively check, if so desired. Otherwise, run on launch
 
-    public static void main(String[] args) throws IOException{
+    public static void setController(Controller controller){ guiController = controller; }
+
+    public static void consoleMain(String url) throws IOException{
         processingQueue = new ConcurrentLinkedQueue();
-        skippedChapters = new ArrayList();
+        skippedIssues = new ArrayList();
 
-        if(!comicInformationGrabber()) return;
+        if(!comicInformationGrabber(url)) return;
         threadStarter();
-
-        thread1.setName("Comic-Downloader Thread 1");
-        thread2.setName("Comic-Downloader Thread 2");
-        thread3.setName("Comic-Downloader Thread 3");
-        thread4.setName("Comic-Downloader Thread 4");
-
-        thread1.start();
-        thread2.start();
-        thread3.start();
-        thread4.start();
     }
 
     public void run(){
@@ -65,32 +61,22 @@ public class comicInformation extends Thread {
         }
     }
 
-    public void exit(){
-        stop = true;
-    }
+    public void exit(){ stop = true; }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private static boolean comicInformationGrabber() throws IOException{
-        File downloads = new File("downloads");
-
-        if(!downloads.exists()){
-            downloads.mkdir();
-        }
-
-        //String url = JOptionPane.showInputDialog("Enter the URL of a comic you want to download.");
-        String url = "https://readcomics.io/comic/spider-man-2016";
-        System.out.println("Establishing connection to " + url + "...");
+    private static boolean comicInformationGrabber(String url) throws IOException{
+        guiController.printlnln("Establishing connection to " + url);
 
         // Establish connection to the comic webpage.
         Connection webpageConnection;
 
         try {
             webpageConnection = Jsoup.connect(url);
-            System.out.println("Connection " + webpageConnection.execute().statusMessage());
+            guiController.printlnln("Connection " + webpageConnection.execute().statusMessage());
         } catch (ConnectException e){
-            System.out.println("Couldn't establish connection to the webpage. Try again later.\n");
+            guiController.println("Couldn't establish connection to the webpage. Try again later.\n");
             return false;
         } catch (MalformedURLException | IllegalArgumentException e) {
-            System.out.println("That's not a valid URL. Exiting...");
+            guiController.println("That's not a valid URL. Exiting...");
             return false;
         }
 
@@ -147,7 +133,7 @@ public class comicInformation extends Thread {
             in the future, whether through SQL or using JSON files. */
         comic = new Comic(name, status, authors, url, description, countedIssues, chapterUrls, issues);
 
-        System.out.println("\n" + comic + "\n");
+        guiController.printComic(comic);
         return true;
     }
 
@@ -158,6 +144,18 @@ public class comicInformation extends Thread {
             if(issue.toString().contains(".")) processingQueue.add(issue);
                 else processingQueue.add(issue);
         }
+
+        thread1.setName("Comic-Downloader Thread 1");
+        thread2.setName("Comic-Downloader Thread 2");
+        thread3.setName("Comic-Downloader Thread 3");
+        thread4.setName("Comic-Downloader Thread 4");
+
+        thread1.start();
+        thread2.start();
+        thread3.start();
+        thread4.start();
+
+        guiController.printlnln("Threads started for downloading!");
     }
 
     // TODO Review Big O Notation for LinkedList. It might be cheaper to start at the last webpage and add each issue from the bottom.
@@ -187,12 +185,18 @@ public class comicInformation extends Thread {
     }
 
     private static void comicDownloader() throws IOException{
-        /*  We can use a relative path here as the compiler knows we want to work in the project root. */
-        File folder = new File("downloads\\" + comic.getName());
+        /*  I made it final so the variable cannot be changed no matter what, as we don't ever want our default save path
+        changed. This defaults our save path to the user's documents folder, regardless of operating system. We can use
+        a relative path here as the compiler knows we want to work in the project root. */
+        final String DEFAULTDIRECTORY = new JFileChooser().getFileSystemView().getDefaultDirectory().toString();
+        final File APPLICATIONROOT = new File(DEFAULTDIRECTORY + "\\Comic-Downloader");
+        if(!APPLICATIONROOT.mkdir()) APPLICATIONROOT.mkdir();
+
+        File folder = new File(APPLICATIONROOT.getAbsolutePath() + "\\" + comic.getName());
 
         if(!folder.exists()){ // If the folder doesn't exist, make the directory.
             folder.mkdir();
-            //System.out.println("Creating folder " + folder + "...\n");
+            //guiController.println("Creating folder " + folder + "...\n");
         }
 
         /*  Since we're working with a queue, our loop-through process is extremely simple. While the queue is not empty,
@@ -214,7 +218,11 @@ public class comicInformation extends Thread {
             else if(thread3.isInterrupted()) thread3.exit();
             else if(thread4.isInterrupted()) thread4.exit();
 
-         if(Thread.activeCount() == 3) System.out.println("Missing issues: " + skippedChapters);
+         if(Thread.activeCount() == 3){
+             guiController.println("All threads closed.");
+             if(skippedIssues.isEmpty()) guiController.println("All issues downloaded! Exiting application...");
+                else guiController.println("Missing issues: " + skippedIssues);
+         }
     }
 
     private static Document webpageConnection(String url, Object issue) throws IOException{
@@ -223,8 +231,8 @@ public class comicInformation extends Thread {
         try {
             webpage = Jsoup.connect(url).get();
         } catch (SocketTimeoutException | ConnectException e){
-            System.out.println("Couldn't establish connection to the webpage. Skipping...\n");
-            skippedChapters.add(issue);
+            guiController.println("Couldn't establish connection to the webpage. Skipping...\n");
+            skippedIssues.add(issue);
             return null;
         }
 
@@ -240,12 +248,12 @@ public class comicInformation extends Thread {
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
-            //System.out.println("Establishing connection to " + url + "...");
+            //guiController.println("Establishing connection to " + url + "...");
             Document webpage = webpageConnection(url, issue);
 
             if(webpage == null) return;
 
-            //System.out.println("Connection established!");
+            //guiController.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -255,26 +263,26 @@ public class comicInformation extends Thread {
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
 
             folder.mkdir();
-            /*System.out.println("Creating folder " + folder + "...\n" +
+            /*guiController.println("Creating folder " + folder + "...\n" +
                     "Downloading " + fileName + "...");*/
-            System.out.println("Downloading " + fileName + " on " + Thread.currentThread().getName() + "...\n");
+            guiController.println("Downloading " + fileName + " on " + Thread.currentThread().getName() + "...\n");
 
             if(!pageDownloader(numberOfPages, fileName, url, folder, issue)) return;
 
             comicMaker(name, issue, folder, parentFolder); // Convert to .cbz
 
-            System.out.println("Downloaded " + fileName + "!\n");
+            guiController.println("Downloaded " + fileName + "!\n");
         } else if(folder.exists()){
-            //System.out.println("Establishing connection to " + url + "...");
+            //guiController.println("Establishing connection to " + url + "...");
 
             Document webpage = webpageConnection(url, issue);
 
             if(webpage == null) return;
 
-            //System.out.println("Connection established!");
+            //guiController.println("Connection established!");
 
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
-            //System.out.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
+            //guiController.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
 
             File[] images = folder.listFiles();
             int counter = 0;
@@ -282,29 +290,29 @@ public class comicInformation extends Thread {
             for(int i = 0; i < images.length; i++) counter++;
 
             if(counter != numberOfPages){
-                System.out.println("Incomplete download found. Deleting and redownloading " + fileName + "...");
+                guiController.println("Incomplete download found. Deleting and redownloading " + fileName + "...");
                 for(File image : images) image.delete();
 
                 if(!pageDownloader(numberOfPages, fileName, url, folder, issue)) return;
 
                 comicMaker(name, issue, folder, parentFolder);
-                System.out.println("Downloaded " + fileName + "!\n");
+                guiController.println("Downloaded " + fileName + "!\n");
             }
 
         } else {
-            System.out.println((fileName + " already downloaded!\n"));
+            guiController.printlnln(fileName + " already downloaded!");
         }
     }
 
     private static boolean pageDownloader(int numberOfPages, String fileName, String url, File folder, Object issue) throws IOException{
         for (int page = 1; page <= numberOfPages; page++){
             if(!internalPageDownloader(fileName, url + "/" + page, folder.getAbsolutePath(), page)){
-                System.out.println(fileName + " couldn't download.\n");
+                guiController.println(fileName + " couldn't download.\n");
 
                 for(File image : folder.listFiles()) image.delete();
                 folder.delete();
 
-                skippedChapters.add(issue);
+                skippedIssues.add(issue);
                 return false;
             }
         }
@@ -318,10 +326,10 @@ public class comicInformation extends Thread {
         try {
             webpage = Jsoup.connect(url).get();
         } catch (SocketTimeoutException e){
-            System.out.println("Couldn't establish connection to the webpage. Skipping...");
+            guiController.println("Couldn't establish connection to the webpage. Skipping...");
             return false;
         } catch (ConnectException e){
-            System.out.println("Couldn't establish connection to the webpage. Skipping...");
+            guiController.println("Couldn't establish connection to the webpage. Skipping...");
             return false;
         }
 
@@ -346,7 +354,7 @@ public class comicInformation extends Thread {
 
         if(image.getErrorStream() == null) in = image.getInputStream();
             else {
-                System.out.println("Received error code: " + image.getErrorStream().read() + " for " + fileName + "\n");
+                guiController.println("Received error code: " + image.getErrorStream().read() + " for " + fileName + "\n");
                 return false;
             }
 
@@ -377,7 +385,7 @@ public class comicInformation extends Thread {
         File[] pages = folder.listFiles();
 
         String outputFile = name + " #" + issue + ".cbz";
-        //System.out.println("Compressing " + name + " #" + issue + " to .cbz archive...");
+        //guiController.println("Compressing " + name + " #" + issue + " to .cbz archive...");
 
         /*  Our FileOutputStream is the path of our output. ZipOutputStream will zip to that file. */
         FileOutputStream fos = new FileOutputStream(parentFolder + "\\" + outputFile);

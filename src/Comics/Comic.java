@@ -1,7 +1,9 @@
+package Comics;
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 
-// TOOD Implement chapter list
+// TODO Implement chapter list
 public class Comic {
     private String name;
     private String status;
@@ -79,12 +81,12 @@ public class Comic {
 
     public String toString(){
         return "Name: " + name +
-                "\nStatus: " + status +
-                "\nAuthors: " + authors +
-                "\nDescription: " + description +
-                "\nNumber of Issues: " + countedIssues +
-                "\nURL: " + url +
-                "\nChapter URLs: " + chapterUrls +
-                "\nIssue Numbers: " + issues;
+                "\n\nStatus: " + status +
+                "\n\nAuthors: " + authors +
+                "\n\nDescription: " + description +
+                "\n\nNumber of Issues: " + countedIssues +
+                "\n\nURL: " + url +
+                "\n\nChapter URLs: " + chapterUrls +
+                "\n\nIssue Numbers: " + issues;
     }
 }

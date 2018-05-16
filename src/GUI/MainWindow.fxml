@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import java.lang.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+
+<GridPane alignment="center" hgap="10" prefHeight="600.0" prefWidth="800.0" vgap="10" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="GUI.Controller">
+   <children>
+      <HBox alignment="CENTER" GridPane.columnIndex="1">
+         <children>
+             <Label text="URL " GridPane.columnIndex="0" GridPane.rowIndex="1" />
+             <TextField fx:id="urlInput" onAction="#onEnter" prefWidth="250" />
+         </children>
+      </HBox>
+       <Label text="Previously Entered URLs" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+       <TextArea fx:id="urlList" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="4" GridPane.rowSpan="3">
+         <GridPane.margin>
+            <Insets right="10.0" />
+         </GridPane.margin>
+      </TextArea>
+       <Label text="Log" GridPane.columnIndex="1" GridPane.rowIndex="7" />
+       <TextArea fx:id="outputArea" editable="false" prefHeight="350.0" wrapText="true" GridPane.columnIndex="1" GridPane.columnSpan="1" GridPane.rowIndex="8">
+         <GridPane.margin>
+            <Insets right="10.0" />
+         </GridPane.margin>
+      </TextArea>
+       <Label text="Comic Information">
+         <GridPane.margin>
+            <Insets left="10.0" />
+         </GridPane.margin></Label>
+       <TextArea fx:id="comicInformation" editable="false" maxHeight="550.0" prefHeight="550.0" prefWidth="300.0" wrapText="true" GridPane.rowSpan="2147483647">
+         <GridPane.margin>
+            <Insets bottom="10.0" left="10.0" top="10.0" />
+         </GridPane.margin>
+      </TextArea>
+   </children>
+   <columnConstraints>
+      <ColumnConstraints />
+      <ColumnConstraints />
+   </columnConstraints>
+   <rowConstraints>
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+   </rowConstraints>
+</GridPane>
