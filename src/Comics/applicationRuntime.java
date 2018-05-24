@@ -16,25 +16,24 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.zip.*;
 
-public class ComicMain extends Thread {
+public class applicationRuntime extends Thread {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     static Comic comic; // Global variable so it can be used in any method without parameter passthrough
 
-    private static Controller guiController; // Static reference to our GUI controller so we can print to the GUI
-
+    public static Controller guiController;
     /*  These control our multi-threading. Because our class extends thread, that means we can create an object from our
         class and initialize it so we can do what we need to do in our main method. The processingQueue will be initialized
         in our main method as well, as a ConcurrentLinkedQueue so multiple threads can work out of it at one time. */
-    private static ComicMain thread1 = new ComicMain();
-    private static ComicMain thread2 = new ComicMain();
-    private static ComicMain thread3 = new ComicMain();
-    private static ComicMain thread4 = new ComicMain();
+    private static applicationRuntime thread1 = new applicationRuntime();
+    private static applicationRuntime thread2 = new applicationRuntime();
+    private static applicationRuntime thread3 = new applicationRuntime();
+    private static applicationRuntime thread4 = new applicationRuntime();
+
+    private static AtomicBoolean running = new AtomicBoolean(true);
 
     static Queue processingQueue;
 
     static ArrayList skippedIssues; // For each issue that is skipped, keep track of it.
-
-    private volatile boolean stop = false; // Our exit value for our threads.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO Implement cross-platform functionality
     // TODO Implement save states
@@ -51,9 +50,19 @@ public class ComicMain extends Thread {
         threadStarter();
     }
 
+    public static void clean(){
+        if(skippedIssues.isEmpty()) guiController.println("All issues downloaded!");
+            else guiController.println("Missing issues: " + skippedIssues);
+
+        thread1.exit();
+        thread2.exit();
+        thread3.exit();
+        thread4.exit();
+    }
+
     public void run(){
-        if(!stop){
-            try {
+        while(running.get()){
+            try{
                 comicDownloader();
             } catch (IOException e){
                 e.printStackTrace();
@@ -61,17 +70,35 @@ public class ComicMain extends Thread {
         }
     }
 
-    public void exit(){ stop = true; }
+    public void exit(){ running.set(false); }
+
+    private static void threadStarter(){
+        LinkedList issues = comic.getIssues();
+
+        for(Object issue : issues) processingQueue.add(issue);
+
+        thread1.setName("Comic-Downloader Thread 1");
+        thread2.setName("Comic-Downloader Thread 2");
+        thread3.setName("Comic-Downloader Thread 3");
+        thread4.setName("Comic-Downloader Thread 4");
+
+        if(!running.get()) running.set(true);
+
+        if(thread1.getState().equals(Thread.State.NEW)) thread1.start();
+        if(thread2.getState().equals(Thread.State.NEW)) thread2.start();
+        if(thread3.getState().equals(Thread.State.NEW)) thread3.start();
+        if(thread4.getState().equals(Thread.State.NEW)) thread4.start();
+    }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     private static boolean comicInformationGrabber(String url) throws IOException{
-        guiController.printlnln("Establishing connection to " + url);
+        guiController.println("Establishing connection to " + url);
 
         // Establish connection to the comic webpage.
         Connection webpageConnection;
 
         try {
             webpageConnection = Jsoup.connect(url);
-            guiController.printlnln("Connection " + webpageConnection.execute().statusMessage());
+            guiController.println("Connection " + webpageConnection.execute().statusMessage());
         } catch (ConnectException e){
             guiController.println("Couldn't establish connection to the webpage. Try again later.\n");
             return false;
@@ -135,27 +162,6 @@ public class ComicMain extends Thread {
 
         guiController.printComic(comic);
         return true;
-    }
-
-    private static void threadStarter(){
-        LinkedList issues = comic.getIssues();
-
-        for(Object issue : issues) {
-            if(issue.toString().contains(".")) processingQueue.add(issue);
-                else processingQueue.add(issue);
-        }
-
-        thread1.setName("Comic-Downloader Thread 1");
-        thread2.setName("Comic-Downloader Thread 2");
-        thread3.setName("Comic-Downloader Thread 3");
-        thread4.setName("Comic-Downloader Thread 4");
-
-        thread1.start();
-        thread2.start();
-        thread3.start();
-        thread4.start();
-
-        guiController.printlnln("Threads started for downloading!");
     }
 
     // TODO Review Big O Notation for LinkedList. It might be cheaper to start at the last webpage and add each issue from the bottom.
@@ -299,8 +305,8 @@ public class ComicMain extends Thread {
                 guiController.println("Downloaded " + fileName + "!\n");
             }
 
-        } else {
-            guiController.printlnln(fileName + " already downloaded!");
+        } else if(cbzFolder.exists()){
+            guiController.println(fileName + " already downloaded!");
         }
     }
 
