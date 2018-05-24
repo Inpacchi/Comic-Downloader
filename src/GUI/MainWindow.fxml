@@ -15,8 +15,16 @@
    <children>
       <HBox alignment="CENTER" GridPane.columnIndex="1">
          <children>
-             <Label text="URL " GridPane.columnIndex="0" GridPane.rowIndex="1" />
+             <Label text="URL " GridPane.columnIndex="0" GridPane.rowIndex="1">
+               <HBox.margin>
+                  <Insets right="1.0" />
+               </HBox.margin></Label>
              <TextField fx:id="urlInput" onAction="#onEnter" prefWidth="250" />
+            <Button fx:id="submit" mnemonicParsing="false" onAction="#onEnter" text="Submit">
+               <HBox.margin>
+                  <Insets left="10.0" />
+               </HBox.margin>
+            </Button>
          </children>
       </HBox>
        <Label text="Previously Entered URLs" GridPane.columnIndex="1" GridPane.rowIndex="3" />
