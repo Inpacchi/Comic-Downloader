@@ -30,8 +30,6 @@ public class applicationRuntime extends Thread {
     private static applicationRuntime thread3 = new applicationRuntime();
     private static applicationRuntime thread4 = new applicationRuntime();
 
-    private static AtomicBoolean running = new AtomicBoolean(true);
-
     private static Queue processingQueue;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO Implement cross-platform functionality
@@ -58,22 +56,11 @@ public class applicationRuntime extends Thread {
     }
 
     public void run(){
-        while(running.get()){
-            try{
-                comicDownloader();
-            } catch (IOException | InterruptedException e){
-                e.printStackTrace();
-            } finally {
-                thread1.exit();
-                thread2.exit();
-                thread3.exit();
-                thread4.exit();
-            }
+        try{
+            comicDownloader();
+        } catch (IOException e){
+            e.printStackTrace();
         }
-    }
-
-    public void exit(){
-        running.set(false);
     }
 
     private static void threadStarter(ArrayList<Thread> threadList){
@@ -81,15 +68,13 @@ public class applicationRuntime extends Thread {
 
         for(Object issue : issues) processingQueue.add(issue);
 
-        if(!running.get()) running.set(true);
-
         for(int thread = 0; thread < threadList.size(); thread++) {
             threadList.get(thread).setName("Comic-Downloader Thread " + (thread + 1));
             if(threadList.get(thread).getState().equals(Thread.State.NEW)) threadList.get(thread).start();
         }
     }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private static Document webpageConnection(String url, Object issue) throws IOException{
+    private static Document webpageConnection(String url) throws IOException{
         Document webpage;
 
         try {
@@ -202,7 +187,7 @@ public class applicationRuntime extends Thread {
         return countedIssues;
     }
 
-    private static void comicDownloader() throws IOException, InterruptedException {
+    private static void comicDownloader() throws IOException {
         /*  I made it final so the variable cannot be changed no matter what, as we don't ever want our default save path
         changed. This defaults our save path to the user's documents folder, regardless of operating system. We can use
         a relative path here as the compiler knows we want to work in the project root. */
@@ -253,7 +238,7 @@ public class applicationRuntime extends Thread {
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
             //guiController.println("Establishing connection to " + url + "...");
-            Document webpage = webpageConnection(url, issue);
+            Document webpage = webpageConnection(url);
 
             if(webpage == null) return;
 
@@ -279,7 +264,7 @@ public class applicationRuntime extends Thread {
         } else if(folder.exists()){
             //guiController.println("Establishing connection to " + url + "...");
 
-            Document webpage = webpageConnection(url, issue);
+            Document webpage = webpageConnection(url);
 
             if(webpage == null) return;
 
