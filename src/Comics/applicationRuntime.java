@@ -56,10 +56,12 @@ public class applicationRuntime extends Thread {
     }
 
     public void run(){
-        try{
-            comicDownloader();
-        } catch (IOException e){
-            e.printStackTrace();
+        while(!Thread.interrupted()){
+            try{
+                comicDownloader();
+            } catch (IOException | InterruptedException e){
+                e.printStackTrace();
+            }
         }
     }
 
@@ -69,12 +71,18 @@ public class applicationRuntime extends Thread {
         for(Object issue : issues) processingQueue.add(issue);
 
         for(int thread = 0; thread < threadList.size(); thread++) {
-            threadList.get(thread).setName("Comic-Downloader Thread " + (thread + 1));
-            if(threadList.get(thread).getState().equals(Thread.State.NEW)) threadList.get(thread).start();
+            Thread temp = threadList.get(thread);
+
+            temp.setName("Comic-Downloader Thread " + (thread + 1));
+
+            if(threadList.get(thread).getState().equals(Thread.State.NEW)){
+                temp.setDaemon(true);
+                temp.start();
+            }
         }
     }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private static Document webpageConnection(String url) throws IOException{
+    private static Document webpageConnection(String url, Object issue) throws IOException{
         Document webpage;
 
         try {
@@ -187,7 +195,7 @@ public class applicationRuntime extends Thread {
         return countedIssues;
     }
 
-    private static void comicDownloader() throws IOException {
+    private static void comicDownloader() throws IOException, InterruptedException {
         /*  I made it final so the variable cannot be changed no matter what, as we don't ever want our default save path
         changed. This defaults our save path to the user's documents folder, regardless of operating system. We can use
         a relative path here as the compiler knows we want to work in the project root. */
@@ -237,12 +245,9 @@ public class applicationRuntime extends Thread {
         /*  We only want to go through the process of downloading images if the folder or the .cbz file does not exist,
             as we don't want to waste unnecessary data redownloading images already present. */
         if(!folder.exists() && !cbzFolder.exists()) {
-            //guiController.println("Establishing connection to " + url + "...");
-            Document webpage = webpageConnection(url);
+            Document webpage = webpageConnection(url, issue);
 
             if(webpage == null) return;
-
-            //guiController.println("Connection established!");
 
             /*  We find the number of pages by inspecting the HTML in a web browser. We found it under the
                 <div class="label>, hence the .select() query. For some reason, it returns two of the same exact value,
@@ -262,16 +267,12 @@ public class applicationRuntime extends Thread {
 
             guiController.println("Downloaded " + fileName + "!\n");
         } else if(folder.exists()){
-            //guiController.println("Establishing connection to " + url + "...");
 
-            Document webpage = webpageConnection(url);
+            Document webpage = webpageConnection(url, issue);
 
             if(webpage == null) return;
 
-            //guiController.println("Connection established!");
-
             int numberOfPages = Integer.parseInt(webpage.select("div.label").first().text().replaceAll("\\D+", ""));
-            //guiController.println(fileName + " already exists!\n" + "Checking for an incomplete download...");
 
             File[] images = folder.listFiles();
             int counter = 0;
